@@ -126,6 +126,14 @@ function DataStoreModule:ReleaseLock(key: string): boolean
 	return success
 end
 
+function DataStoreModule:GetBudget(BudgetType:Enum.DataStoreRequestType)
+	local current = DataStoreService:GetRequestBudgetForRequestType(BudgetType)
+	while current < 1 do
+		task.wait(5)
+		current = DataStoreService:GetRequestBudgetForRequestType(BudgetType)
+	end
+end
+
 function DataStoreModule:GetAsync(key: string): {}?
 	local cached = self:_GetFromCache(key)
 	if cached then return cached end
@@ -140,19 +148,44 @@ function DataStoreModule:GetAsync(key: string): {}?
 	return data
 end
 
-function DataStoreModule:SetAsync(key: string, data: {})
-	retryAsync(function()
-		return self.DataStore:SetAsync(key, data)
-	end)
-	self:_SaveToCache(key, data)
+function DataStoreModule:SetAsync(key: string, data: {}, canBind: boolean?)
+	local success, err
+	repeat
+		if not canBind then self:GetBudget(Enum.DataStoreRequestType.SetIncrementAsync) end
+		success, err = pcall(function()
+			return retryAsync(function()
+				return self.DataStore:SetAsync(key, data)
+			end)
+		end)
+		if success then
+			return true, nil
+		else
+			warn(`Failed to update to key: {key}`)
+		end
+	until success
+	if not success then
+		warn('Failed to save to', key)
+	end
 end
 
-function DataStoreModule:UpdateAsync(key: string, callback: (old: {}?)->{})
-	enqueueAsync(function()
-		retryAsync(function()
-			return self.DataStore:UpdateAsync(key, callback)
+function DataStoreModule:UpdateAsync(key: string, callback: (old: {}?)->{}, canBind: boolean?)
+	local success, result
+	repeat
+		if not canBind then self:GetBudget(Enum.DataStoreRequestType.UpdateAsync) end
+		success, result = pcall(function()
+			enqueueAsync(function()
+				return retryAsync(function()
+					return self.DataStore:UpdateAsync(key, callback)
+				end)
+			end)
 		end)
-	end)
+	until success
+	if success then
+		return true, result
+	else
+		warn('Failed to update to:', key, result)
+		return false, result
+	end
 end
 
 function DataStoreModule:MergeTemplate(template, data)
@@ -185,7 +218,7 @@ function DataStoreModule:CleanData(template, data)
 				if type(value) == "table" then
 					clean(temp[key], value)
 				else
-					targ[key] = {} -- replace invalid types with empty table
+					targ[key] = {}
 				end
 			end
 		end
