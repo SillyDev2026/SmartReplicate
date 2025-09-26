@@ -3,7 +3,7 @@ local Module = script.VirtualData
 local VirtualData = require(Module)
 local Modules = script.Modules
 local DataStore = require(Modules:FindFirstChild('DataStore'))
-local Store = DataStore.new({Name = 'PlayersData'})
+local Store = DataStore.new({Name = 'ClickStore'})
 local PlayersData = script.PlayersData
 
 function Data(name)
@@ -12,12 +12,12 @@ end
 
 Players.PlayerAdded:Connect(function(player)
 	local key = Store.SetKey(player)
-	local default = {
-		MainData = Data('MainData'),
-		PlusData = Data('PlusData'),
-		CostData = Data('CostData')
-	}
-	
+	local default = {}
+	for _, modules in pairs(PlayersData:GetChildren()) do
+		if modules:IsA('ModuleScript') and (modules.Name ~= 'DataStore' and modules.Name ~= 'PlayersDataStore') then
+			default[modules.Name] = require(modules)
+		end
+	end	
 	local data = Store:GetAsync(key, player, default)
 	VirtualData.new(player, data, Store)
 end)
