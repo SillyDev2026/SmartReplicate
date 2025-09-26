@@ -37,7 +37,7 @@ PlayerFolder.__index = PlayerFolder
 export type VirtualData = {
 	EnsureFolder: (self: VirtualData, folderName: string) -> VirtualData,
 	Define: (self: VirtualData, path: string, dataType: string, defaultValue: any, syncMode: string?) -> VirtualData,
-	AddMiddleWare: (self: VirtualData, path: string, func: (value: any, oldValue: any) -> any) -> VirtualData,
+	AddMiddleware: (self: VirtualData, path: string, func: (value: any, oldValue: any) -> any) -> VirtualData,
 	OnCreated: (self:VirtualData, callBack: (folderName: string) -> ()) ->(),
 	OnChanged: (self: VirtualData, path: string, callBack: (newVal: any, oldVal: any) -> any) -> (),
 	Update: (self: VirtualData, folderName: string, itemName: string, value: any) -> (),
