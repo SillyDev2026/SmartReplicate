@@ -5,7 +5,8 @@ local StatsModules = {}
 local Modules = script.Parent:WaitForChild('Modules')
 local PlayersData = script.Parent.PlayersData
 local MainData = require(PlayersData:WaitForChild('MainData'))
-local Stats = require(PlayersData:WaitForChild('Stats'))
+local CostData = require(PlayersData:WaitForChild('CostData'))
+local PlusData = require(PlayersData:FindFirstChild('PlusData'))
 
 for _, moduleScripts in ipairs(Modules:GetChildren()) do
 	if moduleScripts:IsA('ModuleScript') and (moduleScripts.Name ~= 'PlayersDataStore' and moduleScripts.Name ~= 'DataStore') then
@@ -43,7 +44,7 @@ export type VirtualData = {
 	SetSyncMode: (self: VirtualData, folderName: string, mode: string) -> (),
 	TogglePublic: (self: VirtualData, folderName: string) -> (),
 	Destroy: (self: VirtualData) -> (),
-	Data: {MainData: MainData.data, Stats: Stats.data}
+	Data: {MainData: MainData.data, CostData: CostData.data, PlusData: PlusData.data} 
 }
 
 function PlayerFolder.new(player, schema, dataStore): VirtualData
