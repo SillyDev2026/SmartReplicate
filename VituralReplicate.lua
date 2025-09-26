@@ -3,9 +3,12 @@ local Players = game:GetService("Players")
 
 local StatsModules = {}
 local Modules = script.Parent:WaitForChild('Modules')
+local PlayersData = script.Parent.PlayersData
+local MainData = require(PlayersData:WaitForChild('MainData'))
+local Stats = require(PlayersData:WaitForChild('Stats'))
 
 for _, moduleScripts in ipairs(Modules:GetChildren()) do
-	if moduleScripts:IsA('ModuleScript') and moduleScripts.Name ~= 'PlayersDataStore' and moduleScripts.Name ~= 'DataStore' then
+	if moduleScripts:IsA('ModuleScript') and (moduleScripts.Name ~= 'PlayersDataStore' and moduleScripts.Name ~= 'DataStore') then
 		StatsModules[moduleScripts.Name] = require(moduleScripts)
 	end
 end
@@ -30,7 +33,20 @@ end
 local PlayerFolder = {}
 PlayerFolder.__index = PlayerFolder
 
-function PlayerFolder.new(player, schema, dataStore)
+export type VirtualData = {
+	EnsureFolder: (self: VirtualData, folderName: string) -> VirtualData,
+	Define: (self: VirtualData, path: string, dataType: string, defaultValue: any, syncMode: string?) -> VirtualData,
+	AddMiddleWare: (self: VirtualData, path: string, func: (value: any, oldValue: any) -> any) -> VirtualData,
+	OnCreated: (self:VirtualData, callBack: (folderName: string) -> ()) ->(),
+	OnChanged: (self: VirtualData, path: string, callBack: (newVal: any, oldVal: any) -> any) -> (),
+	Update: (self: VirtualData, folderName: string, itemName: string, value: any) -> (),
+	SetSyncMode: (self: VirtualData, folderName: string, mode: string) -> (),
+	TogglePublic: (self: VirtualData, folderName: string) -> (),
+	Destroy: (self: VirtualData) -> (),
+	Data: {MainData: MainData.data, Stats: Stats.data}
+}
+
+function PlayerFolder.new(player, schema, dataStore): VirtualData
 	if ActiveFolders[player.UserId] then return ActiveFolders[player.UserId] end
 	local self = setmetatable({}, PlayerFolder)
 	self.Player = player
@@ -149,7 +165,13 @@ function PlayerFolder:Destroy()
 	FolderSyncEvent:FireAllClients("RemovePlayer", self.Player.UserId)
 end
 
-function PlayerFolder.get(player) return ActiveFolders[player.UserId] end
+function PlayerFolder.get(player): VirtualData
+	local folder = ActiveFolders[player.UserId]
+	while not folder do
+		task.wait()
+	end
+	return folder
+end
 function PlayerFolder.remove(player)
 	local folder = ActiveFolders[player.UserId]
 	if folder then folder:Destroy() end

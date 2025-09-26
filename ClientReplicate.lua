@@ -5,6 +5,15 @@ local LocalPlayer = Players.LocalPlayer
 local FolderSyncEvent = ReplicatedStorage:WaitForChild("FolderSyncEvent")
 
 local ActiveFolders = {}
+export type ClientData = {
+	EnsureFolder: (self: ClientData, folderName: string) -> (),
+	OnCreated: (self: ClientData, callback: (folderName: string) -> ()) -> (),
+	OnChanged: (self: ClientData, path: string, callback: (newValue: any, oldValue: any?) -> ()) -> (),
+	ApplyUpdate: (self: ClientData, folderName: string, itemName: string, value: any) -> (),
+	RequestUpdate: (self: ClientData, folderName: string, itemName: string, value: any) -> (),
+	RequestModule: (self: ClientData, moduleName: string, action: string) -> (),
+	GetData: (self: ClientData, folderName: string, statName: string) -> any,
+}
 
 local function DeepCopy(tbl)
 	local copy = {}
@@ -78,7 +87,7 @@ function ClientFolder:RequestUpdate(folderName, itemName, value)
 	FolderSyncEvent:FireServer("RequestUpdate", folderName, itemName, value)
 end
 
-function ClientFolder.get(userId)
+function ClientFolder.get(userId): ClientData
 	local folder = ActiveFolders[userId]
 	while not folder do
 		task.wait()

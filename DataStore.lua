@@ -3,7 +3,7 @@ local Module = script.VirtualData
 local VirtualData = require(Module)
 local Modules = script.Modules
 local DataStore = require(Modules:FindFirstChild('DataStore'))
-local Store = DataStore.new({Name = 'ClickStore'})
+local Store = DataStore.new({Name = 'LevelTracker'})
 local PlayersData = script.PlayersData
 
 function Data(name)
@@ -14,7 +14,7 @@ Players.PlayerAdded:Connect(function(player)
 	local key = Store.SetKey(player)
 	local default = {}
 	for _, modules in pairs(PlayersData:GetChildren()) do
-		if modules:IsA('ModuleScript') and (modules.Name ~= 'DataStore' and modules.Name ~= 'PlayersDataStore') then
+		if modules:IsA('ModuleScript') then
 			default[modules.Name] = require(modules)
 		end
 	end	
