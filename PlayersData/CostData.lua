@@ -4,5 +4,5 @@ local module = {
 	PrestigeCost = 25,
 	__sync = 'Private'
 }
-
+export type data = typeof(module)
 return module

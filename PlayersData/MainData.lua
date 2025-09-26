@@ -7,4 +7,6 @@ local module = {
 	__sync = 'Public'
 }
 
+export type data = typeof(module)
+
 return module

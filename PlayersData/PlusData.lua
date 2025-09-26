@@ -6,5 +6,5 @@ local module = {
 	--other stats
 	__sync = 'Private'
 }
-
+export type data = typeof(module)
 return module
