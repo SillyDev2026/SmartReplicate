@@ -1,61 +1,55 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
-local StatsModules = {}
-local Modules = script.Parent:WaitForChild('Modules')
-local PlayersData = script.Parent.PlayersData
-local MainData = require(PlayersData:WaitForChild('MainData'))
-local CostData = require(PlayersData:WaitForChild('CostData'))
-local PlusData = require(PlayersData:FindFirstChild('PlusData'))
+local ModulesFolder = script.Parent:WaitForChild("Modules")
+local StatsModules: {[string]: any} = {}
 
-for _, moduleScripts in ipairs(Modules:GetChildren()) do
-	if moduleScripts:IsA('ModuleScript') and (moduleScripts.Name ~= 'PlayersDataStore' and moduleScripts.Name ~= 'DataStore') then
-		StatsModules[moduleScripts.Name] = require(moduleScripts)
+for _, mod in ipairs(ModulesFolder:GetChildren()) do
+	if mod:IsA("ModuleScript") and mod.Name ~= "PlayersDataStore" and mod.Name ~= "DataStore" then
+		StatsModules[mod.Name] = require(mod)
 	end
 end
 
-local FolderSyncEvent = ReplicatedStorage:FindFirstChild("FolderSyncEvent")
-if not FolderSyncEvent then
-	FolderSyncEvent = Instance.new("RemoteEvent")
-	FolderSyncEvent.Name = "FolderSyncEvent"
-	FolderSyncEvent.Parent = ReplicatedStorage
-end
+local FolderSyncEvent = ReplicatedStorage:FindFirstChild("FolderSyncEvent") or Instance.new("RemoteEvent")
+FolderSyncEvent.Name = "FolderSyncEvent"
+FolderSyncEvent.Parent = ReplicatedStorage
 
-local ActiveFolders = {}
+local ActiveFolders: {[number]: any} = {}
 
-local function DeepCopy(tbl)
-	local copy = {}
+local function DeepCopy<T>(tbl: T): T
+	if type(tbl) ~= "table" then return tbl end
+	local copy = {} :: any
 	for k,v in pairs(tbl) do
-		if type(v)=="table" then copy[k]=DeepCopy(v) else copy[k]=v end
+		copy[k] = DeepCopy(v)
 	end
 	return copy
 end
-
-local PlayerFolder = {}
-PlayerFolder.__index = PlayerFolder
 
 export type VirtualData = {
 	EnsureFolder: (self: VirtualData, folderName: string) -> VirtualData,
 	Define: (self: VirtualData, path: string, dataType: string, defaultValue: any, syncMode: string?) -> VirtualData,
 	AddMiddleware: (self: VirtualData, path: string, func: (value: any, oldValue: any) -> any) -> VirtualData,
-	OnCreated: (self:VirtualData, callBack: (folderName: string) -> ()) ->(),
-	OnChanged: (self: VirtualData, path: string, callBack: (newVal: any, oldVal: any) -> any) -> (),
-	Update: (self: VirtualData, folderName: string, itemName: string, value: any) -> (),
+	OnCreated: (self: VirtualData, callback: (folderName: string) -> ()) -> (),
+	OnChanged: (self: VirtualData, path: string, callback: (newVal: any, oldVal: any) -> ()) -> (),
+	Update: (self: VirtualData, path: string, value: any) -> (),
 	SetSyncMode: (self: VirtualData, folderName: string, mode: string) -> (),
 	TogglePublic: (self: VirtualData, folderName: string) -> (),
+	GetData: (self: VirtualData, path: string) -> any,
 	Destroy: (self: VirtualData) -> (),
-	Data: {MainData: MainData.data, CostData: CostData.data, PlusData: PlusData.data} 
 }
 
-function PlayerFolder.new(player, schema, dataStore): VirtualData
+local PlayerFolder = {}
+PlayerFolder.__index = PlayerFolder
+
+function PlayerFolder.new(player: Player, schema: {[string]: any}?, dataStore: any): VirtualData
 	if ActiveFolders[player.UserId] then return ActiveFolders[player.UserId] end
 	local self = setmetatable({}, PlayerFolder)
 	self.Player = player
 	self.Data = schema and DeepCopy(schema) or {}
 	self.Version = 1
-	self.ChangeListeners = {}
-	self.CreatedListeners = {}
-	self.Middleware = {}
+	self.ChangeListeners = {} :: {[string]: {(any, any) -> ()}}
+	self.CreatedListeners = {} :: {(string) -> ()}
+	self.Middleware = {} :: {[string]: (any, any) -> any}
 	self.Store = dataStore
 	ActiveFolders[player.UserId] = self
 
@@ -67,37 +61,49 @@ function PlayerFolder.new(player, schema, dataStore): VirtualData
 	return self
 end
 
-function PlayerFolder:EnsureFolder(folderName)
+-- Utilities
+function PlayerFolder:EnsureFolder(folderName: string)
 	if not self.Data[folderName] then
-		self.Data[folderName] = { __sync = "Private" }
+		self.Data[folderName] = {__sync = "Private"}
 		self:FireCreated(folderName)
 	end
 end
 
-function PlayerFolder:Define(path, dataType, defaultValue, syncMode)
-	local folderName, itemName = path:match("([^.]+)%.([^.]+)")
+function PlayerFolder:Define(path: string, dataType: string, defaultValue: any, syncMode: string?)
+	local parts = {}
+	for part in path:gmatch("[^.]+") do
+		table.insert(parts, part)
+	end
+	local folderName = parts[1]
 	self:EnsureFolder(folderName)
-	local folder = self.Data[folderName]
-	folder[itemName] = defaultValue
-	folder.__sync = syncMode or "Private"
-	folder[itemName.."__type"] = dataType
+	local current = self.Data
+	for i, part in ipairs(parts) do
+		if i == #parts then
+			current[part] = defaultValue
+			current[part.."__type"] = dataType
+		else
+			current[part] = current[part] or {}
+			current = current[part]
+		end
+	end
+	self.Data[folderName].__sync = syncMode or self.Data[folderName].__sync or "Private"
 end
 
-function PlayerFolder:AddMiddleware(path, func)
+function PlayerFolder:AddMiddleware(path: string, func: (any, any) -> any)
 	self.Middleware[path] = func
 end
 
-function PlayerFolder:FireCreated(folderName)
-	for _,cb in ipairs(self.CreatedListeners) do
+function PlayerFolder:FireCreated(folderName: string)
+	for _, cb in ipairs(self.CreatedListeners) do
 		cb(folderName)
 	end
 end
 
-function PlayerFolder:OnCreated(callback)
+function PlayerFolder:OnCreated(callback: (folderName: string) -> ())
 	table.insert(self.CreatedListeners, callback)
 end
 
-function PlayerFolder:FireChanged(path, newValue, oldValue)
+function PlayerFolder:FireChanged(path: string, newValue: any, oldValue: any)
 	if self.ChangeListeners[path] then
 		for _, cb in ipairs(self.ChangeListeners[path]) do
 			cb(newValue, oldValue)
@@ -105,41 +111,70 @@ function PlayerFolder:FireChanged(path, newValue, oldValue)
 	end
 end
 
-function PlayerFolder:OnChanged(path, callback)
+function PlayerFolder:OnChanged(path: string, callback: (newVal: any, oldVal: any) -> ())
 	self.ChangeListeners[path] = self.ChangeListeners[path] or {}
 	table.insert(self.ChangeListeners[path], callback)
 end
 
-function PlayerFolder:Update(folderName, itemName, value)
-	self:EnsureFolder(folderName)
-	local folder = self.Data[folderName]
-	if itemName == "__sync" then return end
-	local expectedType = folder[itemName.."__type"]
-	if expectedType and type(value) ~= expectedType then
-		warn("Type mismatch on update:", folderName, itemName)
-		return
+function PlayerFolder:GetData(path: string): any
+	local current = self.Data
+	for part in path:gmatch("[^.]+") do
+		if type(current) ~= "table" then
+			warn(`Invalid path: {path}`)
+			return nil
+		end
+		current = current[part]
+		if current == nil then
+			warn(`Path not found: {path}`)
+			return nil
+		end
 	end
-	local path = folderName.."."..itemName
-	if self.Middleware[path] then
-		value = self.Middleware[path](value, folder[itemName])
-	end
-	local oldValue = folder[itemName]
-	folder[itemName] = value
-	self.Version += 1
-	self:FireChanged(path, value, oldValue)
-	local syncMode = folder.__sync or "Private"
-	if syncMode == "Public" then
-		FolderSyncEvent:FireAllClients("Update", self.Player.UserId, folderName, itemName, value)
-	else
-		FolderSyncEvent:FireClient(self.Player, "Update", self.Player.UserId, folderName, itemName, value)
-	end
-	if self.Store then
-		local key = self.Store.SetKey(self.Player)
-		self.Store.Session[key] = self.Data
+	return current
+end
+
+function PlayerFolder:Update(path: string, value: any)
+	local parts = {}
+	for part in path:gmatch("[^.]+") do table.insert(parts, part) end
+	if #parts == 0 then return end
+	self:EnsureFolder(parts[1])
+
+	local current = self.Data
+	for i, part in ipairs(parts) do
+		if i == #parts then
+			if part == "__sync" then return end
+			local expectedType = current[part.."__type"]
+			if expectedType and type(value) ~= expectedType then
+				warn(`Type mismatch for {path}, expected {expectedType}, got {typeof(value)}`)
+				return
+			end
+			local fullPath = table.concat(parts, ".")
+			if self.Middleware[fullPath] then
+				value = self.Middleware[fullPath](value, current[part])
+			end
+			local oldValue = current[part]
+			current[part] = value
+			self.Version += 1
+			self:FireChanged(fullPath, value, oldValue)
+
+			local syncMode = self.Data[parts[1]].__sync or "Private"
+			if syncMode == "Public" then
+				FolderSyncEvent:FireAllClients("Update", self.Player.UserId, parts[1], part, value)
+			else
+				FolderSyncEvent:FireClient(self.Player, "Update", self.Player.UserId, parts[1], part, value)
+			end
+
+			if self.Store then
+				local key = self.Store.SetKey(self.Player)
+				self.Store.Session[key] = self.Data
+			end
+		else
+			current[part] = current[part] or {}
+			current = current[part]
+		end
 	end
 end
 
-function PlayerFolder:SetSyncMode(folderName, mode)
+function PlayerFolder:SetSyncMode(folderName: string, mode: string)
 	local folder = self.Data[folderName]
 	if not folder then return end
 	folder.__sync = mode
@@ -152,13 +187,16 @@ function PlayerFolder:SetSyncMode(folderName, mode)
 			end
 		end
 	end
+	if self.Store then
+		local key = self.Store.SetKey(self.Player)
+		self.Store.Session[key] = self.Data
+	end
 end
 
-function PlayerFolder:TogglePublic(folderName)
+function PlayerFolder:TogglePublic(folderName: string)
 	local folder = self.Data[folderName]
 	if not folder then return end
-	local newMode = (folder.__sync == "Public") and "Private" or "Public"
-	self:SetSyncMode(folderName, newMode)
+	self:SetSyncMode(folderName, (folder.__sync == "Public") and "Private" or "Public")
 end
 
 function PlayerFolder:Destroy()
@@ -166,25 +204,26 @@ function PlayerFolder:Destroy()
 	FolderSyncEvent:FireAllClients("RemovePlayer", self.Player.UserId)
 end
 
-function PlayerFolder.get(player): VirtualData
+function PlayerFolder.get(player: Player): VirtualData
 	local folder = ActiveFolders[player.UserId]
-	while not folder do
-		task.wait()
-	end
+	while not folder do task.wait() end
 	return folder
 end
-function PlayerFolder.remove(player)
+
+function PlayerFolder.remove(player: Player)
 	local folder = ActiveFolders[player.UserId]
 	if folder then folder:Destroy() end
 end
 
+-- Remote Event Handling
 FolderSyncEvent.OnServerEvent:Connect(function(player, action, ...)
 	local folder = PlayerFolder.get(player)
 	if not folder then return end
+
 	if action == "RequestUpdate" then
-		local folderName, itemName, value = ...
-		if folder then folder:Update(folderName, itemName, value) end
-	elseif action == 'RequestModule' then
+		local path, value = ...
+		if folder then folder:Update(path, value) end
+	elseif action == "RequestModule" then
 		local moduleName, moduleAction = ...
 		local module = StatsModules[moduleName]
 		if module and module[moduleAction] then
