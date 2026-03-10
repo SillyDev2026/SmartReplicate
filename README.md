@@ -1,6 +1,10 @@
 <img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c72822" />
 
 https://create.roblox.com/store/asset/106198281373990/DataStoreService
+
+if any errors or suggestions join the server and ill be glad to improve the plugin
+https://discord.gg/xtEMCYmuKk
+
 SmartReplicate is a Roblox Lua module designed to replicate player data from the client to the server safely. It ensures that all updates are validated, synchronized, and optionally visible to other clients based on a public/private sync mode. The module is built around PlayerFolder objects, which store player data in organized folders and provide change notifications, middleware support, and type enforcement.
 How to Use SmartReplicate
 Setup
