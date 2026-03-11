@@ -1,31 +1,43 @@
 <img width="256" height="256" alt="image" src="https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c72822" />
 
+
 <img width="1126" height="749" alt="image" src="https://github.com/user-attachments/assets/ab6e0d6d-2799-4cec-a916-3fed41235cd7" />
+
 
 <img width="1133" height="754" alt="image" src="https://github.com/user-attachments/assets/0cf4c717-2b26-4cac-8ae7-1b9305b8be2e" />
 
+
 <img width="1132" height="759" alt="image" src="https://github.com/user-attachments/assets/8424e3fd-1327-4094-9a13-0489cedead16" />
+
 
 <img width="1133" height="755" alt="image" src="https://github.com/user-attachments/assets/dd9564e4-14c6-49d2-86aa-8969ba89222b" />
 
+
 <img width="1126" height="755" alt="image" src="https://github.com/user-attachments/assets/a036b6c6-b8d8-4ef9-bfa6-c4ebd168ae51" />
 
+
 <img width="1129" height="751" alt="image" src="https://github.com/user-attachments/assets/41581f36-3e78-4e2e-8386-44891c6b85a7" />
+
 
 <img width="406" height="72" alt="image" src="https://github.com/user-attachments/assets/2483a8ae-b30a-4a02-be2f-d6b546b9bd47" />
 this part is to save state
 
+
 <img width="335" height="87" alt="image" src="https://github.com/user-attachments/assets/207081fe-2d92-44c9-8ed2-3f66ee224e0b" />
 this part is to either create ur modules to SmartReplicate or update and create folder and module
+
 
 <img width="1128" height="756" alt="image" src="https://github.com/user-attachments/assets/a3fbc5bc-f6c5-4984-8132-0aad483992ca" />
 if folder has nothing this is what it will look like
 
+
 <img width="397" height="276" alt="image" src="https://github.com/user-attachments/assets/1fa4b5b2-2480-4f53-8d02-7d4757f80be6" />
 left button click u can edit the folders name
 
+
 <img width="1131" height="754" alt="image" src="https://github.com/user-attachments/assets/843f4998-3e9e-4485-bc3c-ea25275ca0f1" />
 as u can see it shows u what there is for types and the searches
+
 
 https://create.roblox.com/store/asset/106198281373990/DataStoreService
 
