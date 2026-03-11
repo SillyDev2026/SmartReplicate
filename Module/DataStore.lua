@@ -3,6 +3,8 @@ local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 local DataStore = require(script.Parent.PlayersDataStore)
 
+local PlayersData = require(script.Parent.PlayersData)
+
 function DataStoreModule.new(config: {Name: string, Scope: string?})
 	local self = {}
 	self.DataStore = DataStore.new(config)
@@ -23,7 +25,7 @@ function DataStoreModule:ReleaseLockSession(key)
 	return self.DataStore:ReleaseLock(key)
 end
 
-function DataStoreModule:GetAsync(key: string, player: Player, template)
+function DataStoreModule:GetAsync(key: string, player: Player, template): PlayersData.Data
 	local lockSuccess, lockErr = self:AcquireLockSession(key)
 	if self:IsSessionLocked(key) and not lockSuccess then
 		player:Kick('Your session is already active in another server')
