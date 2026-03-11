@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 
 local ModulesFolder = script.Parent:WaitForChild("Modules")
 local StatsModules: {[string]: any} = {}
+local PlayersData = require(script.Parent.Modules.PlayersData)
 
 for _, mod in ipairs(ModulesFolder:GetChildren()) do
 	if mod:IsA("ModuleScript") and mod.Name ~= "PlayersDataStore" and mod.Name ~= "DataStore" then
@@ -36,6 +37,7 @@ export type VirtualData = {
 	TogglePublic: (self: VirtualData, folderName: string) -> (),
 	GetData: (self: VirtualData, path: string) -> any,
 	Destroy: (self: VirtualData) -> (),
+	Data: PlayersData.Data,
 }
 
 local PlayerFolder = {}
