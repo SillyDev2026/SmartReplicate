@@ -1,106 +1,193 @@
 # DataStore Builder & SmartReplicate
 
-DataStore Builder is a Roblox Studio plugin for creating and managing DataStore modules with folders, keys, and typed values. It provides a GUI for editing, searching, saving, and exporting structured data, and integrates with the SmartReplicate module for safe client-server data replication.
+**DataStore Builder** is a Roblox Studio plugin that simplifies the
+creation and management of structured DataStore modules.\
+It provides a visual interface for organizing folders, defining typed
+keys, editing values, and exporting modules directly into your
+experience.
 
----
+The plugin integrates with **SmartReplicate**, a secure client-server
+replication system that ensures player data is validated, synchronized,
+and safely shared when needed.
 
-## 📌 Plugin Overview
+------------------------------------------------------------------------
 
-- Create and manage DataStore modules.
-- Organize data in structured folders and typed keys.
-- Save, update, and replicate data safely with SmartReplicate.
-- Search, filter, and edit data directly from the plugin interface.
+## Preview
 
----
+`<img width="1129" src="https://github.com/user-attachments/assets/e82330c0-0858-4e82-9023-89647e931418" />`{=html}
+`<img width="1138" src="https://github.com/user-attachments/assets/d215913b-f6a0-40b8-9622-b9c79c705b24" />`{=html}
+`<img width="1128" src="https://github.com/user-attachments/assets/f9746e48-68ed-4230-8a1f-97c0eb0502e8" />`{=html}
 
-## 🖼️ Screenshots
+`<img width="408" src="https://github.com/user-attachments/assets/9dc9e1a6-4d4c-4cb6-beee-f9b00fd63b7e" />`{=html}
+`<img width="330" src="https://github.com/user-attachments/assets/d522911c-4112-44fb-89c2-10f11a26fd17" />`{=html}
+
+`<img width="1124" src="https://github.com/user-attachments/assets/2d7f1554-88ef-4e88-a75e-1ee47033ca82" />`{=html}
+
+------------------------------------------------------------------------
+
+# Plugin Overview
+
+DataStore Builder allows developers to manage complex data structures in
+Roblox visually.
+
+-   **Folder-based organization** for structured data\
+-   **Type safety** to prevent errors\
+-   **Instant editing** and updates\
+-   **Module generation** and update management\
+-   **SmartReplicate integration** for secure data replication
+
+------------------------------------------------------------------------
+
+# Features
+
+  Feature                      Description                             Status
+  ---------------------------- --------------------------------------- --------
+  Folder-based DataStore       Organize keys in folders                ✅
+  Typed Values                 Type-enforced keys for safety           ✅
+  Module Generation            Automatic creation/update of modules    ✅
+  Search & Filter              Quick search across all data            ✅
+  SmartReplicate Integration   Safe client-server replication          ✅
+  Middleware Support           Pre-save validation & transformations   ✅
+
+------------------------------------------------------------------------
+
+# Quick Start
+
+1.  Install DataStore Builder plugin.\
+2.  Open the plugin from the toolbar.\
+3.  Create folder structure and define keys.\
+4.  Save the DataStore modules.\
+5.  Place SmartReplicate module in ServerScriptService.\
+6.  Start the game; data will replicate securely.
+
+------------------------------------------------------------------------
+
+# Search Syntax
+
+Use the search panel to filter your data quickly:
+
+-   `folder:<name>` → search within a folder\
+-   `key:<name>` → search by key\
+-   `type:<type>` → filter by type (string, number, boolean, table)\
+-   `value:<value>` → exact value match\
+-   `min:<number>` / `max:<number>` → numerical range\
+-   `!<key>` → exclude a key from search
+
+------------------------------------------------------------------------
+
+# Data Structure Example
+
+``` text
+PlayerData
+├─ Stats
+│  ├─ Coins (number)
+│  ├─ Level (number)
+│  └─ XP (number)
+├─ Inventory
+│  ├─ Items (table)
+│  └─ Currency (number)
+└─ Settings
+   ├─ MusicEnabled (boolean)
+   └─ GraphicsLevel (number)
+```
+
+### Mermaid Diagram Example
+
+``` mermaid
+graph TD
+  PlayerData-->Stats
+  Stats-->Coins
+  Stats-->Level
+  Stats-->XP
+  PlayerData-->Inventory
+  Inventory-->Items
+  Inventory-->Currency
+  PlayerData-->Settings
+  Settings-->MusicEnabled
+  Settings-->GraphicsLevel
+```
+
+------------------------------------------------------------------------
+
+# Plugin Architecture
+
+``` mermaid
+graph LR
+  PluginUI[Plugin UI] --> DataStoreModule[DataStore Module]
+  DataStoreModule --> ServerScriptService
+  DataStoreModule --> SmartReplicate
+  SmartReplicate --> Client[Client (optional replication)]
+```
+
+This diagram shows how the plugin, module, server, and client interact.
+
+------------------------------------------------------------------------
+
+# SmartReplicate Module
+
+SmartReplicate is a Roblox Lua module designed to safely replicate
+player data between the server and clients. It validates data, enforces
+types, triggers events, and ensures safe public/private replication.
+
+### Workflow
+
+1.  **Setup**: Place the module in `ServerScriptService`.\
+2.  **Create Player Folders**: Each player receives a `PlayerFolder`
+    with default schema.\
+3.  **Define Data**: Use `Define` to add items with type, default value,
+    and replication mode.\
+4.  **Listen for Changes**: Attach listeners to individual items or
+    folders.\
+5.  **Middleware**: Validate, transform, or enforce rules before
+    saving.\
+6.  **Update Data**: Call `Update` to change values; middleware and
+    replication rules apply.\
+7.  **Replication Modes**: Public = all clients, Private = only owner.\
+8.  **Cleanup**: Folders are removed when players leave; events notify
+    clients.
+
+SmartReplicate abstracts the networking complexity for safe and reliable
+multiplayer data handling.
+
+------------------------------------------------------------------------
+
+# Screenshots
 
 ### Plugin Icon
-![Plugin Icon](https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c72822)
 
-### Main Interface
-![Main Interface](https://github.com/user-attachments/assets/ab6e0d6d-2799-4cec-a916-3fed41235cd7)
+![Plugin
+Icon](https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c72822)
 
-### Types & Search Panel
-![Types & Search](https://github.com/user-attachments/assets/0cf4c717-2b26-4cac-8ae7-1b9305b8be2e)
-![Types & Search](https://github.com/user-attachments/assets/8424e3fd-1327-4094-9a13-0489cedead16)
-![Types & Search](https://github.com/user-attachments/assets/dd9564e4-14c6-49d2-86aa-8969ba89222b)
-![Types & Search](https://github.com/user-attachments/assets/a036b6c6-b8d8-4ef9-bfa6-c4ebd168ae51)
-![Types & Search](https://github.com/user-attachments/assets/41581f36-3e78-4e2e-8386-44891c6b85a7)
+### Interface
 
-### Save State
-![Save State](https://github.com/user-attachments/assets/2483a8ae-b30a-4a02-be2f-d6b546b9bd47)
+![Interface](https://github.com/user-attachments/assets/e82330c0-0858-4e82-9023-89647e931418)
 
-### Create/Update Modules
-![Create/Update Modules](https://github.com/user-attachments/assets/207081fe-2d92-44c9-8ed2-3f66ee224e0b)
+### Folder Editor
 
-### Empty Folder View
-![Empty Folder](https://github.com/user-attachments/assets/a3fbc5bc-f6c5-4984-8132-0aad483992ca)
+![Folders](https://github.com/user-attachments/assets/d215913b-f6a0-40b8-9622-b9c79c705b24)
 
-### Rename Folders
-![Rename Folder](https://github.com/user-attachments/assets/1fa4b5b2-2480-4f53-8d02-7d4757f80be6)
+### Data Editing Panel
 
-### Type Overview & Search Suggestions
-![Type Overview](https://github.com/user-attachments/assets/843f4998-3e9e-4485-bc3c-ea25275ca0f1)
+![Editor](https://github.com/user-attachments/assets/f9746e48-68ed-4230-8a1f-97c0eb0502e8)
 
----
+### Toolbar
 
-## 🛒 Plugin Store
-[Roblox Store Link](https://create.roblox.com/store/asset/106198281373990/DataStoreService)
+![Toolbar](https://github.com/user-attachments/assets/9dc9e1a6-4d4c-4cb6-beee-f9b00fd63b7e)
 
----
+### Data Overview
 
-## 💬 Support
-For errors, feedback, or feature suggestions, join the Discord server:  
+![Overview](https://github.com/user-attachments/assets/2d7f1554-88ef-4e88-a75e-1ee47033ca82)
+
+------------------------------------------------------------------------
+
+# Plugin Store
+
+[Roblox Plugin Store
+Link](https://create.roblox.com/store/asset/106198281373990/DataStoreService)
+
+------------------------------------------------------------------------
+
+# Support
+
+For errors, feedback, or feature suggestions, join the Discord server:\
 [Discord Invite](https://discord.gg/xtEMCYmuKk)
-
----
-
-## SmartReplicate Module
-
-SmartReplicate is a Roblox Lua module designed to safely replicate player data from the client to the server. It validates, synchronizes, and optionally shares data with other clients. Data is organized using `PlayerFolder` objects with middleware, type enforcement, and event notifications.
-
-<details>
-<summary>How to Use SmartReplicate</summary>
-
-### 1. Setup
-Place the SmartReplicate module in `ServerScriptService` along with any additional modules for custom behaviors or special data operations.
-
-### 2. Creating Player Folders
-When a player joins, create a `PlayerFolder`. Each folder stores all player data in a structured format. SmartReplicate auto-copies a default schema for every player.
-
-### 3. Defining Data Items
-Use `Define` to create items inside a folder. Each item has:
-- Type
-- Default value
-- Optional sync mode (public/private)
-
-Public folders replicate to all clients, private folders replicate only to the owner.
-
-### 4. Listening for Changes
-Attach listeners to individual items or entire folders. Listeners trigger automatically on changes. You can also monitor newly created folders.
-
-### 5. Middleware
-Middleware functions intercept and modify values before saving. Useful for validation, rule enforcement, or transformations.
-
-### 6. Updating Data
-Use `Update` to change item values. SmartReplicate:
-- Checks type
-- Applies middleware
-- Triggers events
-- Replicates updates according to sync mode
-
-### 7. Public/Private Sync
-- **Public:** Replicates changes to all clients.
-- **Private:** Replicates changes to the owning player only.  
-Sync mode can be changed dynamically.
-
-### 8. Cleaning Up
-When a player leaves, their folder is removed, and clients are notified. Manual folder removal is also supported.
-
-### 9. Integration with Modules
-Additional modules can define extra behaviors, custom data processing, server-side logic, or special events.
-
-SmartReplicate abstracts client-server replication, making multiplayer data handling safe, secure, and reliable.
-
-</details>
