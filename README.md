@@ -128,12 +128,11 @@ flowchart TD
 ```
 
 ```mermaid
-sequenceDiagram
-  PluginUI->>DataStoreModule: Save Request
-  DataStoreModule->>Middleware: Run Pre-Save Checks
-  Middleware->>SmartReplicate: Validate & Transform
-  SmartReplicate->>ServerScriptService: Write Data
-  ServerScriptService->>PluginUI: Save Complete
+flowchart LR
+  DataTable["Data Table"] --> EditUI["Value Editor"]
+  EditUI --> Update["Update DataStore Module"]
+  Update --> Middleware["Run Middleware"]
+  Middleware --> SmartReplicate["SmartReplicate"]
   ```
 
 ------------------------------------------------------------------------
