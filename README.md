@@ -121,6 +121,21 @@ graph LR
 
 This diagram shows how the plugin, module, server, and client interact.
 
+``` mermaid
+flowchart TD
+  SearchInput["Search Input"] --> Filter["Apply Filters"]
+  Filter --> Display["Update Data Table"]
+```
+
+```mermaid
+sequenceDiagram
+  PluginUI->>DataStoreModule: Save Request
+  DataStoreModule->>Middleware: Run Pre-Save Checks
+  Middleware->>SmartReplicate: Validate & Transform
+  SmartReplicate->>ServerScriptService: Write Data
+  ServerScriptService->>PluginUI: Save Complete
+  ```
+
 ------------------------------------------------------------------------
 
 # SmartReplicate Module
