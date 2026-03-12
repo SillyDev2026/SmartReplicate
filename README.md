@@ -113,10 +113,10 @@ graph TD
 
 ``` mermaid
 graph LR
-  PluginUI[Plugin UI] --> DataStoreModule[DataStore Module]
-  DataStoreModule --> ServerScriptService
-  DataStoreModule --> SmartReplicate
-  SmartReplicate --> Client[Client (optional replication)]
+  PluginUI["Plugin UI"] --> DataStoreModule["DataStore Module"]
+  DataStoreModule --> ServerScriptService["ServerScriptService"]
+  DataStoreModule --> SmartReplicate["SmartReplicate"]
+  SmartReplicate --> Client["Client - optional replication"]
 ```
 
 This diagram shows how the plugin, module, server, and client interact.
