@@ -190,7 +190,8 @@ Icon](https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c
 
 ### Data Overview
 
-![Overview](https://github.com/user-attachments/assets/03d8b82e-e027-403a-ab93-4b5f3de2cc3c)
+![Overview](<img width="1127" height="610" alt="image" src="https://github.com/user-attachments/assets/4f0eff80-8997-4a92-bcd4-9db066752b9c" />
+)
 ------------------------------------------------------------------------
 
 # Plugin Store
