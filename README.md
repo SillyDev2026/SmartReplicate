@@ -12,6 +12,9 @@ and safely shared when needed.
 
 ------------------------------------------------------------------------
 
+## Yt Tutorial
+https://www.youtube.com/watch?v=aXyyyM4RXKs
+
 ## Preview
 
 `<img width="1129" src="https://github.com/user-attachments/assets/e82330c0-0858-4e82-9023-89647e931418" />`{=html}
