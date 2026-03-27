@@ -1,5 +1,9 @@
 # DataStore Builder & SmartReplicate
 
+full from the plugin as in Create Services it will replicated the required modules and scripts to the places
+<img width="310" height="661" alt="image" src="https://github.com/user-attachments/assets/cb5d0826-6ba3-4ba1-a440-2a6b2f95ef56" />
+
+
 **DataStore Builder** is a Roblox Studio plugin that simplifies the
 creation and management of structured DataStore modules.\
 It provides a visual interface for organizing folders, defining typed
@@ -202,6 +206,55 @@ Icon](https://github.com/user-attachments/assets/c2597cc3-4b52-4fe7-99df-f4fb75c
 Link](https://create.roblox.com/store/asset/106198281373990/DataStoreService)
 
 ------------------------------------------------------------------------
+
+# Example Client Script
+```lua
+local Client = require('@game/ReplicatedStorage/ClientHandler')
+local Player = game:GetService('Players').LocalPlayer
+local Bnum = require('@game/ReplicatedStorage/Bnum')
+
+local TextButton = script.Parent.TextButton
+local TextLabel = script.Parent.TextLabel
+local new = Client.get(Player.UserId)
+
+TextButton.Text = 'Clicks +' .. Bnum.format(new:GetData('PlusData.ClickPlus'))
+TextLabel.Text = 'Clicks: ' .. Bnum.format(new:GetData('MainData.Clicks'))
+
+new:OnChanged('PlusData.ClickPlus', function(new)
+	TextButton.Text = 'Clicks +' .. Bnum.format(new)
+end)
+
+new:OnChanged('MainData.Clicks', function(new)
+	TextLabel.Text = 'Clicks: ' .. Bnum.format(new)
+end)
+
+TextButton.MouseButton1Click:Connect(function()
+	new:RequestModule('Click', 'UpdateClicks')
+end)
+```
+------------------------------------------------------------------------
+# Example Module Script as in RequestModule
+must have module like
+<img width="255" height="157" alt="image" src="https://github.com/user-attachments/assets/c9223f95-73c8-40da-94b6-83cb3d67409d" />
+
+```lua
+local module = {}
+local TypeCheck = require(script.Parent.Parent.TypeChecks)
+local Bnum = require('@game/ReplicatedStorage/Bnum')
+
+function module.UpdateClicks(player, folder: TypeCheck.PlayerFolder)
+	local data = folder.Data
+	local MainData = data.MainData
+	local PlusData = data.PlusData
+	local Clicks = MainData.Clicks
+	local ClickPlus = PlusData.ClickPlus
+	Clicks = Bnum.toStr(Bnum.add(Clicks, ClickPlus))
+	print(`{player.Name} has updated Clicks to: {Clicks}`)
+	folder:Update('MainData.Clicks', Clicks)
+end
+
+return module
+
 
 # Support
 
