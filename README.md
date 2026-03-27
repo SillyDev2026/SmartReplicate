@@ -254,7 +254,7 @@ function module.UpdateClicks(player, folder: TypeCheck.PlayerFolder)
 end
 
 return module
-
+```
 
 # Support
 
