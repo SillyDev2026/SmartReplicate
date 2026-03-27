@@ -1,6 +1,6 @@
 # DataStore Builder & SmartReplicate
 
-full from the plugin as in Create Services it will replicated the required modules and scripts to the places
+full from the plugin as in Create Services it will replicated the required modules and scripts to the places except for Bnum
 <img width="310" height="661" alt="image" src="https://github.com/user-attachments/assets/cb5d0826-6ba3-4ba1-a440-2a6b2f95ef56" />
 
 
