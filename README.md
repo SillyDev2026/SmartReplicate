@@ -258,5 +258,5 @@ return module
 
 # Support
 
-For errors, feedback, or feature suggestions, join the Discord server:\
+For errors, feedback, or feature suggestions, join the Discord server
 [Discord Invite](https://discord.gg/xtEMCYmuKk)
