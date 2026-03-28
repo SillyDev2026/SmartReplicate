@@ -1,7 +1,10 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local FolderSyncEvent = ReplicatedStorage:WaitForChild("FolderSyncEvent")
+
+local EventBus = require('@game/ReplicatedStorage/NetworkHandler/EventBus')
+local Events = require('@game/ReplicatedStorage/Events')
+
+local Bus = EventBus.Remote(false)
 
 local ActiveFolders: {[number]: any} = {}
 
@@ -15,10 +18,10 @@ export type ClientData = {
 	GetData: (self: ClientData, path: string) -> any,
 }
 
-local function DeepCopy<T>(tbl: T): T
+local function DeepCopy(tbl)
 	if type(tbl) ~= "table" then return tbl end
-	local copy = {} :: any
-	for k,v in pairs(tbl) do
+	local copy = {}
+	for k, v in pairs(tbl) do
 		copy[k] = DeepCopy(v)
 	end
 	return copy
@@ -27,25 +30,30 @@ end
 local ClientFolder = {}
 ClientFolder.__index = ClientFolder
 
-function ClientFolder.new(userId: number, schema: {[string]: any}? ): ClientData
-	if ActiveFolders[userId] then return ActiveFolders[userId] end
+-- 🔹 constructor
+function ClientFolder.new(userId: number, schema: {[string]: any}?): ClientData
+	if ActiveFolders[userId] then
+		return ActiveFolders[userId]
+	end
+
 	local self = setmetatable({}, ClientFolder)
 	self.UserId = userId
 	self.Data = schema and DeepCopy(schema) or {}
 	self.Version = 1
-	self.ChangeListeners = {} :: {[string]: {(any, any?) -> ()}}
-	self.CreatedListeners = {} :: {(string) -> ()}
-	self.Middleware = {} :: {[string]: (any, any?) -> any}
+	self.ChangeListeners = {}
+	self.CreatedListeners = {}
+	self.Middleware = {}
+
 	ActiveFolders[userId] = self
 
-	for folderName,_ in pairs(self.Data) do
+	for folderName in pairs(self.Data) do
 		self:FireCreated(folderName)
 	end
 
 	return self
 end
 
--- Ensure a folder exists at the top level
+-- 🔹 utilities
 function ClientFolder:EnsureFolder(folderName: string)
 	if not self.Data[folderName] then
 		self.Data[folderName] = {}
@@ -53,18 +61,16 @@ function ClientFolder:EnsureFolder(folderName: string)
 	end
 end
 
--- Creation listeners
 function ClientFolder:FireCreated(folderName: string)
 	for _, cb in ipairs(self.CreatedListeners) do
 		cb(folderName)
 	end
 end
 
-function ClientFolder:OnCreated(callback: (folderName: string) -> ())
+function ClientFolder:OnCreated(callback)
 	table.insert(self.CreatedListeners, callback)
 end
 
--- Change listeners
 function ClientFolder:FireChanged(path: string, newValue: any, oldValue: any?)
 	if self.ChangeListeners[path] then
 		for _, cb in ipairs(self.ChangeListeners[path]) do
@@ -73,29 +79,35 @@ function ClientFolder:FireChanged(path: string, newValue: any, oldValue: any?)
 	end
 end
 
-function ClientFolder:OnChanged(path: string, callback: (newValue: any, oldValue: any?) -> ())
+function ClientFolder:OnChanged(path: string, callback)
 	self.ChangeListeners[path] = self.ChangeListeners[path] or {}
 	table.insert(self.ChangeListeners[path], callback)
 end
 
--- Apply an update to arbitrary depth
+-- 🔹 apply update
 function ClientFolder:ApplyUpdate(path: string, value: any)
-	local parts = {} :: {string}
-	for part in path:gmatch("[^.]+") do table.insert(parts, part) end
+	local parts = {}
+	for part in path:gmatch("[^.]+") do
+		table.insert(parts, part)
+	end
+
 	if #parts == 0 then return end
 
-	-- ensure top-level folder
 	self:EnsureFolder(parts[1])
 
 	local current = self.Data
+
 	for i, part in ipairs(parts) do
 		if i == #parts then
 			local fullPath = table.concat(parts, ".")
+
 			if self.Middleware[fullPath] then
 				value = self.Middleware[fullPath](value, current[part])
 			end
+
 			local oldValue = current[part]
 			current[part] = value
+
 			self.Version += 1
 			self:FireChanged(fullPath, value, oldValue)
 		else
@@ -105,40 +117,37 @@ function ClientFolder:ApplyUpdate(path: string, value: any)
 	end
 end
 
--- Request server update
+-- 🔹 requests
 function ClientFolder:RequestUpdate(path: string, value: any)
-	FolderSyncEvent:FireServer("RequestUpdate", path, value)
+	Bus:Fire(Events.RequestUpdate.Id, Events.RequestUpdate.Tag, path, value)
 end
 
--- Generic module request
-function ClientFolder:RequestModule<T...>(moduleName: string, action: string, ...: T...)
-	FolderSyncEvent:FireServer("RequestModule", moduleName, action, ...)
+function ClientFolder:RequestModule(moduleName: string, action: string, ...)
+	Bus:Fire(Events.RequestModule.Id, Events.RequestModule.Tag, moduleName, action, ...)
 end
 
--- Get data from arbitrary depth
-function ClientFolder:GetData(path: string): any
+-- 🔹 data access
+function ClientFolder:GetData(path: string)
 	local current = self.Data
+
 	for part in path:gmatch("[^.]+") do
-		if type(current) ~= "table" then
-			warn(`Invalid path: {path}`)
-			return nil
-		end
+		if type(current) ~= "table" then return nil end
 		current = current[part]
-		if current == nil then
-			warn(`Path not found: {path}`)
-			return nil
-		end
+		if current == nil then return nil end
 	end
+
 	return current
 end
 
--- Get active folder by userId
+-- 🔹 static
 function ClientFolder.get(userId: number): ClientData
 	local folder = ActiveFolders[userId]
+
 	while not folder do
 		task.wait()
 		folder = ActiveFolders[userId]
 	end
+
 	return folder
 end
 
@@ -146,20 +155,20 @@ function ClientFolder.remove(userId: number)
 	ActiveFolders[userId] = nil
 end
 
--- Client event handling
-FolderSyncEvent.OnClientEvent:Connect(function(action: string, userId: number, ...)
-	local folder = ActiveFolders[userId]
-	if action == "InitPlayer" then
-		local data = ...
-		ClientFolder.new(userId, data)
-	elseif action == "Update" then
-		local path, value = ...
-		if folder then
-			folder:ApplyUpdate(path, value)
-		end
-	elseif action == "RemovePlayer" then
-		ClientFolder.remove(userId)
-	end
+Bus:Connect(Events.InitPlayer.Id, function(_, tag, userId, data)
+	ClientFolder.new(tonumber(userId), data)
+end)
+
+Bus:Connect(Events.Update.Id, function(_, tag, userId, folderName, key, value)
+	local folder = ActiveFolders[tonumber(userId)]
+	if not folder then return end
+
+	local path = folderName .. "." .. key
+	folder:ApplyUpdate(path, value)
+end)
+
+Bus:Connect(Events.RemovePlayer.Id, function(_, tag, userId)
+	ClientFolder.remove(userId)
 end)
 
 return ClientFolder
