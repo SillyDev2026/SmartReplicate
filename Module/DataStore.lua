@@ -87,16 +87,21 @@ function DataStoreModule:UpdateAsync(key: string, canBind: boolean?)
         self:ReleaseLockSession(key)
         return false, "MISSING_SESSION"
     end
-	local success, err = pcall(function()
-		return self.DataStore:UpdateAsync(key, function(oldData)
-			return session
-		end, canBind)
-	end)
-	if not success then
-		warn(`Failed to save data because of: {err}`)
-	end
-	self:ReleaseLockSession(key)
-	return success, err
+    local pcallOk, writeOk, result = pcall(function()
+        return self.DataStore:UpdateAsync(key, function(_oldData)
+            return session
+        end, canBind)
+    end)
+    self:ReleaseLockSession(key)
+    if not pcallOk then
+        warn("[SmartReplicate] UpdateAsync raised an error:", writeOk)
+        return false, writeOk
+    end
+    if not writeOk then
+        warn("[SmartReplicate] UpdateAsync failed:", result)
+        return false, result
+    end
+    return true, result
 end
 
 function DataStoreModule:OnLeaveSet(key, userIds: {any}?, options: DataStoreSetOptions?)
@@ -107,40 +112,38 @@ function DataStoreModule:OnLeaveUpdate(key)
 	self:UpdateAsync(key, false)
 end
 
-function DataStoreModule:BindOnSet(key, players: Players)
+function DataStoreModule:BindOnSet(key: string, players: Players): boolean
     assert(RunService:IsServer(), "Shutdown save is server-only")
-	local bind = Instance.new('BindableEvent')
-	local allPlayers = players:GetPlayers()
-	local allCurrent = #allPlayers
-	for _, player in pairs(allPlayers) do
-		task.spawn(function()
-            local playerKey = key .. tostring(player.UserId)
-            self:SetAsync(playerKey, true)
-			allCurrent -= 1
-			if allCurrent <= 0 then bind:Fire() end
-		end)
-	end
-    if allCurrent <= 0 then bind:Destroy() return end
-    bind.Event:Wait()
-    bind:Destroy()
+    local remaining = 0
+    for _, player in ipairs(players:GetPlayers()) do
+        remaining += 1
+        local playerKey = key .. tostring(player.UserId)
+        task.spawn(function()
+            local ok, err = pcall(self.SetAsync, self, playerKey, true)
+            if not ok then warn("[SmartReplicate] Shutdown SetAsync failed:", err) end
+            remaining -= 1
+        end)
+    end
+    local deadline = os.clock() + 24
+    while remaining > 0 and os.clock() < deadline do task.wait(0.05) end
+    return remaining == 0
 end
 
-function DataStoreModule:BindOnUpdate(key: string, players: Players)
+function DataStoreModule:BindOnUpdate(key: string, players: Players): boolean
     assert(RunService:IsServer(), "Shutdown save is server-only")
-	local bind = Instance.new('BindableEvent')
-	local allPlayers = players:GetPlayers()
-	local allCurrent = #allPlayers
-	for _, player in pairs(allPlayers) do
-		task.spawn(function()
-            local playerKey = key .. tostring(player.UserId)
-            self:UpdateAsync(playerKey, true)
-			allCurrent -= 1
-			if allCurrent <= 0 then bind:Fire() end
-		end)
-	end
-    if allCurrent <= 0 then bind:Destroy() return end
-    bind.Event:Wait()
-    bind:Destroy()
+    local remaining = 0
+    for _, player in ipairs(players:GetPlayers()) do
+        remaining += 1
+        local playerKey = key .. tostring(player.UserId)
+        task.spawn(function()
+            local ok, err = pcall(self.UpdateAsync, self, playerKey, true)
+            if not ok then warn("[SmartReplicate] Shutdown UpdateAsync failed:", err) end
+            remaining -= 1
+        end)
+    end
+    local deadline = os.clock() + 24
+    while remaining > 0 and os.clock() < deadline do task.wait(0.05) end
+    return remaining == 0
 end
 
 function DataStoreModule.SetKey(player: Player)
