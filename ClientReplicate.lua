@@ -33,6 +33,12 @@ ClientFolder.__index = ClientFolder
 -- 🔹 constructor
 function ClientFolder.new(userId: number, schema: {[string]: any}?): ClientData
 	if ActiveFolders[userId] then
+        if type(schema) == "table" then
+            local existing = ActiveFolders[userId]
+            for folderName, data in pairs(schema) do
+                existing.Data[folderName] = DeepCopy(data)
+            end
+        end
 		return ActiveFolders[userId]
 	end
 
@@ -111,8 +117,8 @@ function ClientFolder:ApplyUpdate(path: string, value: any)
 			self.Version += 1
 			self:FireChanged(fullPath, value, oldValue)
 		else
-			current[part] = current[part] or {}
-			current = current[part]
+            if type(current[part]) ~= "table" then current[part] = {} end
+            current = current[part]
 		end
 	end
 end
@@ -152,7 +158,8 @@ function ClientFolder.get(userId: number): ClientData
 end
 
 function ClientFolder.remove(userId: number)
-	ActiveFolders[userId] = nil
+    local normalized = tonumber(userId)
+    if normalized then ActiveFolders[normalized] = nil end
 end
 
 Bus:Connect(Events.InitPlayer.Id, function(_, tag, userId, data)
