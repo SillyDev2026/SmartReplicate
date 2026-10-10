@@ -1,5 +1,8 @@
 local ClickModule = {}
 
+-- Only these named server-authoritative actions can be invoked remotely.
+ClickModule.ClientActions = {OnClick = true}
+
 function ClickModule.OnClick(player, folder)
 	print(folder)
 	local clicks = folder.Data.MainData.Clicks
