@@ -6,43 +6,17 @@ local RunService = game:GetService("RunService")
 local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 
-local maxRetries = 30
+local maxRetries = 6
 local retryDelay = 0.3
-
-local asyncQueue = {}
-local queueMutex = false
-
-local function enqueueAsync(func: ()->())
-	while queueMutex do task.wait(0.01) end
-	queueMutex = true
-	table.insert(asyncQueue, func)
-	queueMutex = false
-end
-
-coroutine.wrap(function()
-	while true do
-		if #asyncQueue > 0 then
-			while queueMutex do task.wait(0.01) end
-			queueMutex = true
-			local func = table.remove(asyncQueue, 1)
-			queueMutex = false
-
-			local success, err = pcall(func)
-			if not success then
-				warn("[DataStoreModule] Queue processing error:", err)
-			end
-		end
-		task.wait(0.1)
-	end
-end)()
+local maxRetryDelay = 4
 
 local function retryAsync(func: ()->any)
 	local delayTime = retryDelay
 	for i = 1, maxRetries do
 		local success, result = pcall(func)
 		if success then return result end
-		task.wait(delayTime)
-		delayTime = delayTime * 2
+		if i < maxRetries then task.wait(delayTime) end
+        delayTime = math.min(delayTime * 2, maxRetryDelay)
 	end
 	error("[DataStoreModule] Failed after max retries")
 end
@@ -92,24 +66,20 @@ function DataStoreModule:IsLocked(key: string): boolean
 end
 
 function DataStoreModule:AcquireLock(key: string): boolean
-	local lockKey = self:_GetLockKey(key)
-	local success, _ = pcall(function()
-		self.DataStore:UpdateAsync(lockKey, function(current)
-			if current and current.Expiration > os.time() then
-				if current.SessionId == self.SessionId then
-					current.Expiration = os.time() + self.LockTTL
-					return current
-				end
-				return nil
-			else
-				return {
-					SessionId = self.SessionId,
-					Expiration = os.time() + self.LockTTL
-				}
-			end
-		end)
-	end)
-	return success
+    local lockKey = self:_GetLockKey(key)
+    local success, result = pcall(function()
+        return self.DataStore:UpdateAsync(lockKey, function(current)
+            local now = os.time()
+            if type(current) == "table" and type(current.Expiration) == "number"
+                and current.Expiration > now and current.SessionId ~= self.SessionId then
+                return nil -- Another server owns this lock.
+            end
+            return {SessionId = self.SessionId, Expiration = now + self.LockTTL}
+        end)
+    end)
+    -- A successful API call that was cancelled due to an existing lock is
+    -- NOT successful acquisition.
+    return success and type(result) == "table" and result.SessionId == self.SessionId
 end
 
 function DataStoreModule:ReleaseLock(key: string): boolean
@@ -149,43 +119,33 @@ function DataStoreModule:GetAsync(key: string): {}?
 end
 
 function DataStoreModule:SetAsync(key: string, data: {}, canBind: boolean?)
-	local success, err
-	repeat
-		if not canBind then self:GetBudget(Enum.DataStoreRequestType.SetIncrementAsync) end
-		success, err = pcall(function()
-			return retryAsync(function()
-				return self.DataStore:SetAsync(key, data)
-			end)
-		end)
-		if success then
-			return true, nil
-		else
-			warn(`Failed to update to key: {key}`)
-		end
-	until success
-	if not success then
-		warn('Failed to save to', key)
-	end
+    if not canBind then self:GetBudget(Enum.DataStoreRequestType.SetIncrementAsync) end
+    local success, err = pcall(function()
+        return retryAsync(function()
+            return self.DataStore:SetAsync(key, data)
+        end)
+    end)
+    if not success then
+        warn("[SmartReplicate] SetAsync failed for key:", key, err)
+        return false, err
+    end
+    self:_SaveToCache(key, data)
+    return true, nil
 end
 
-function DataStoreModule:UpdateAsync(key: string, callback: (old: {}?)->{}, canBind: boolean?)
-	local success, result
-	repeat
-		if not canBind then self:GetBudget(Enum.DataStoreRequestType.UpdateAsync) end
-		success, result = pcall(function()
-			enqueueAsync(function()
-				return retryAsync(function()
-					return self.DataStore:UpdateAsync(key, callback)
-				end)
-			end)
-		end)
-	until success
-	if success then
-		return true, result
-	else
-		warn('Failed to update to:', key, result)
-		return false, result
-	end
+function DataStoreModule:UpdateAsync(key: string, callback: (old: {}?) -> {}?, canBind: boolean?)
+    if not canBind then self:GetBudget(Enum.DataStoreRequestType.UpdateAsync) end
+    local success, result = pcall(function()
+        return retryAsync(function()
+            return self.DataStore:UpdateAsync(key, callback)
+        end)
+    end)
+    if not success then
+        warn("[SmartReplicate] UpdateAsync failed for key:", key, result)
+        return false, result
+    end
+    if result ~= nil then self:_SaveToCache(key, result) end
+    return true, result
 end
 
 function DataStoreModule:MergeTemplate(template, data)

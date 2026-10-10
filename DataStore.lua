@@ -15,8 +15,9 @@ Players.PlayerAdded:Connect(function(player)
 			default[modules.Name] = require(modules)
 		end
 	end	
-	local data = Store:GetAsync(key, player, default)
-	local folder = VirtualData.new(player, data, Store)
+    local data = Store:GetAsync(key, player, default)
+    if data == nil then return end -- Do not replicate a failed or locked load.
+    local folder = VirtualData.new(player, data, Store)
 	-- u create the rest here if any problems just contact sillydev0050 in discord
 end)
 

@@ -3,7 +3,7 @@ local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 local DataStore = require(script.Parent.PlayersDataStore)
 
-local PlayersData = require(script.Parent.PlayersData)
+-- No PlayersData sibling module exists; data templates come from the caller.
 
 function DataStoreModule.new(config: {Name: string, Scope: string?})
 	local self = {}
@@ -25,18 +25,22 @@ function DataStoreModule:ReleaseLockSession(key)
 	return self.DataStore:ReleaseLock(key)
 end
 
-function DataStoreModule:GetAsync(key: string, player: Player, template): PlayersData.Data
-	local lockSuccess, lockErr = self:AcquireLockSession(key)
-	if self:IsSessionLocked(key) and not lockSuccess then
-		player:Kick('Your session is already active in another server')
-		return nil
-	end
+function DataStoreModule:GetAsync(key: string, player: Player, template): {[string]: any}?
+    local lockSuccess = self:AcquireLockSession(key)
+    if not lockSuccess then
+        player:Kick("Unable to lock your data safely. Please reconnect.")
+        return nil
+    end
 	local success, result = pcall(function()
 		return self.DataStore:GetAsync(key)
 	end)
-	if not success or not result then
-		result = self.DataStore:_GetFromCache(key) or {}
-	end
+    if not success then
+        self:ReleaseLockSession(key)
+        warn("[SmartReplicate] Load failed; refusing default overwrite:", result)
+        player:Kick("Your saved data could not be loaded safely.")
+        return nil
+    end
+    if result == nil then result = {} end
 	if template then
 		result = self.DataStore:MergeTemplate(template, result)
 		result = self.DataStore:CleanData(template, result)
@@ -55,11 +59,15 @@ end
 
 function DataStoreModule:SetAsync(key: string, canBindData: boolean?, userIds: {number}?, option: DataStoreSetOptions?)
 	local lockSuccess, lockErr = self:AcquireLockSession(key)
-	if not lockSuccess then
-		warn('failed to get lock', lockErr)
-	end
-	local session = self:GetSession(key)
-	if not session then return end
+    if not lockSuccess then
+        warn("[SmartReplicate] Write lock unavailable:", key, lockErr)
+        return false, lockErr
+    end
+    local session = self:GetSession(key)
+    if not session then
+        self:ReleaseLockSession(key)
+        return false, "MISSING_SESSION"
+    end
 	local success, err = self.DataStore:SetAsync(key, session, canBindData, userIds, option)
 	if not success then
 		warn(`Failed to save data because of: {err}`)
@@ -70,21 +78,30 @@ end
 
 function DataStoreModule:UpdateAsync(key: string, canBind: boolean?)
 	local lockSuccess, lockErr = self:AcquireLockSession(key)
-	if not lockSuccess then
-		warn('failed to get lock', lockErr)
-	end
-	local session = self:GetSession(key)
-	if not session then return end
-	local success, err = pcall(function()
-		return self.DataStore:UpdateAsync(key, function(oldData)
-			return session
-		end, canBind)
-	end)
-	if not success then
-		warn(`Failed to save data because of: {err}`)
-	end
-	self:ReleaseLockSession(key)
-	return success, err
+    if not lockSuccess then
+        warn("[SmartReplicate] Write lock unavailable:", key, lockErr)
+        return false, lockErr
+    end
+    local session = self:GetSession(key)
+    if not session then
+        self:ReleaseLockSession(key)
+        return false, "MISSING_SESSION"
+    end
+    local pcallOk, writeOk, result = pcall(function()
+        return self.DataStore:UpdateAsync(key, function(_oldData)
+            return session
+        end, canBind)
+    end)
+    self:ReleaseLockSession(key)
+    if not pcallOk then
+        warn("[SmartReplicate] UpdateAsync raised an error:", writeOk)
+        return false, writeOk
+    end
+    if not writeOk then
+        warn("[SmartReplicate] UpdateAsync failed:", result)
+        return false, result
+    end
+    return true, result
 end
 
 function DataStoreModule:OnLeaveSet(key, userIds: {any}?, options: DataStoreSetOptions?)
@@ -95,36 +112,38 @@ function DataStoreModule:OnLeaveUpdate(key)
 	self:UpdateAsync(key, false)
 end
 
-function DataStoreModule:BindOnSet(key, players: Players)
-	if RunService:IsServer() then return task.wait(2) end
-	local bind = Instance.new('BindableEvent')
-	local allPlayers = players:GetPlayers()
-	local allCurrent = #allPlayers
-	for _, player in pairs(allPlayers) do
-		task.spawn(function()
-			key = key .. player.UserId
-			self:SetAsync(key, true)
-			allCurrent -= 1
-			if allCurrent <= 0 then bind:Fire() end
-		end)
-	end
-	bind.Event:Wait()
+function DataStoreModule:BindOnSet(key: string, players: Players): boolean
+    assert(RunService:IsServer(), "Shutdown save is server-only")
+    local remaining = 0
+    for _, player in ipairs(players:GetPlayers()) do
+        remaining += 1
+        local playerKey = key .. tostring(player.UserId)
+        task.spawn(function()
+            local ok, err = pcall(self.SetAsync, self, playerKey, true)
+            if not ok then warn("[SmartReplicate] Shutdown SetAsync failed:", err) end
+            remaining -= 1
+        end)
+    end
+    local deadline = os.clock() + 24
+    while remaining > 0 and os.clock() < deadline do task.wait(0.05) end
+    return remaining == 0
 end
 
-function DataStoreModule:BindOnUpdate(key: string, players: Players)
-	if RunService:IsServer() then return task.wait(2) end
-	local bind = Instance.new('BindableEvent')
-	local allPlayers = players:GetPlayers()
-	local allCurrent = #allPlayers
-	for _, player in pairs(allPlayers) do
-		task.spawn(function()
-			key = key .. player.UserId
-			self:UpdateAsync(key, true)
-			allCurrent -= 1
-			if allCurrent <= 0 then bind:Fire() end
-		end)
-	end
-	bind.Event:Wait()
+function DataStoreModule:BindOnUpdate(key: string, players: Players): boolean
+    assert(RunService:IsServer(), "Shutdown save is server-only")
+    local remaining = 0
+    for _, player in ipairs(players:GetPlayers()) do
+        remaining += 1
+        local playerKey = key .. tostring(player.UserId)
+        task.spawn(function()
+            local ok, err = pcall(self.UpdateAsync, self, playerKey, true)
+            if not ok then warn("[SmartReplicate] Shutdown UpdateAsync failed:", err) end
+            remaining -= 1
+        end)
+    end
+    local deadline = os.clock() + 24
+    while remaining > 0 and os.clock() < deadline do task.wait(0.05) end
+    return remaining == 0
 end
 
 function DataStoreModule.SetKey(player: Player)
