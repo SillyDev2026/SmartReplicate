@@ -14,6 +14,39 @@ for _, moduleScripts in ipairs(Modules:GetChildren()) do
 end
 
 local ActiveFolders = {}
+local requestClock = {} -- Fixed two-slot per-player throttle (module/update).
+local MIN_MODULE_INTERVAL = 0.10
+local MIN_UPDATE_INTERVAL = 0.10
+local MAX_REQUEST_PATH = 96
+
+local function allowRequest(player: Player, channel: "module" | "update", interval: number): boolean
+    if player.Parent ~= Players then return false end
+    local current = os.clock()
+    local clock = requestClock[player.UserId]
+    if clock == nil then
+        clock = {module = -math.huge, update = -math.huge}
+        requestClock[player.UserId] = clock
+    end
+    if current - clock[channel] < interval then return false end
+    clock[channel] = current
+    return true
+end
+
+local function validPath(path: any): boolean
+    return type(path) == "string" and #path > 2 and #path <= MAX_REQUEST_PATH
+        and path:match("^[%w_]+%.[%w_]+$") ~= nil
+end
+
+local function publicSnapshot(data: {[string]: any}): {[string]: any}
+    local visible = {}
+    for name, folder in pairs(data) do
+        if type(folder) == "table" and folder.__sync == "Public" then
+            visible[name] = folder
+        end
+    end
+    return visible
+end
+
 
 local function DeepCopy(tbl)
 	if type(tbl) ~= "table" then return tbl end
@@ -41,6 +74,7 @@ function PlayerFolder.new(player, schema, dataStore)
 	self.ChangeListeners = {}
 	self.CreatedListeners = {}
 	self.Middleware = {}
+    self.ClientWritable = {} -- Default deny: clients cannot set arbitrary persisted values.
 	self.Store = dataStore
 
 	ActiveFolders[player.UserId] = self
@@ -49,7 +83,11 @@ function PlayerFolder.new(player, schema, dataStore)
 		self:FireCreated(folderName)
 	end
 
-	Net:Fire(IDs.InitPlayer.Id, tostring(player.UserId), self.Data)
+    -- Initial snapshots must not broadcast private fields to other clients.
+    -- Send both a public snapshot and an owner-only full snapshot; the client
+    -- merges packets if either one arrives first.
+    Net:Fire(IDs.InitPlayer.Id, tostring(player.UserId), publicSnapshot(self.Data))
+    Net:FireToPlayer(player, IDs.InitPlayer.Id, tostring(player.UserId), self.Data)
 
 	return self
 end
@@ -72,6 +110,18 @@ function PlayerFolder:Define(path, dataType, defaultValue, syncMode)
 	folder[itemName] = defaultValue
 	folder[itemName .. "__type"] = dataType
 	folder.__sync = syncMode or "Private"
+end
+
+function PlayerFolder:AllowClientUpdate(path: string, validator: ((any, any) -> boolean)?)
+    assert(validPath(path), "Client-writable paths must use Folder.Key")
+    assert(validator == nil or type(validator) == "function", "Validator must be a function")
+    self.ClientWritable[path] = validator or true
+    return self
+end
+
+function PlayerFolder:DisallowClientUpdate(path: string)
+    self.ClientWritable[path] = nil
+    return self
 end
 
 function PlayerFolder:AddMiddleware(path, func)
@@ -106,10 +156,10 @@ function PlayerFolder:Update(folderName, itemName, value)
 	self:EnsureFolder(folderName)
 
 	local folder = self.Data[folderName]
-	if itemName == "__sync" then return end
+	if itemName == "__sync" or itemName:match("__type$") then return end
 
 	local expectedType = folder[itemName .. "__type"]
-	if expectedType and type(value) ~= expectedType then
+	if expectedType and typeof(value) ~= expectedType then
 		warn("Type mismatch on update:", folderName, itemName)
 		return
 	end
@@ -148,13 +198,20 @@ function PlayerFolder:SetSyncMode(folderName, mode)
 	local folder = self.Data[folderName]
 	if not folder then return end
 
-	folder.__sync = mode
+    assert(mode == "Public" or mode == "Private", "Sync mode must be Public or Private")
+    folder.__sync = mode
 
-	for itemName, value in pairs(folder) do
-		if itemName ~= "__sync" and not itemName:match("__type$") then
-			Net:Fire(IDs.Update.Id, tostring(self.Player.UserId), folderName, itemName, value)
-		end
-	end
+    for itemName, value in pairs(folder) do
+        if itemName ~= "__sync" and not itemName:match("__type$") then
+            if mode == "Public" then
+                Net:Fire(IDs.Update.Id, tostring(self.Player.UserId), folderName, itemName, value)
+            else
+                -- Revoke values previously made public on other clients.
+                Net:Fire(IDs.Update.Id, tostring(self.Player.UserId), folderName, itemName, nil)
+                Net:FireToPlayer(self.Player, IDs.Update.Id, tostring(self.Player.UserId), folderName, itemName, value)
+            end
+        end
+    end
 
 	if self.Store then
 		local key = self.Store.SetKey(self.Player)
@@ -188,23 +245,56 @@ function PlayerFolder.remove(player)
 	if folder then folder:Destroy() end
 end
 
-Net:Connect(IDs.RequestUpdate.Id, function(player, folderName, itemName, value)
-	local folder = PlayerFolder.get(player)
-	if folder then
-		folder:Update(folderName, itemName, value)
-	end
+Net:Connect(IDs.RequestUpdate.Id, function(player, pathOrFolder, keyOrValue, optionalValue)
+    if not allowRequest(player, "update", MIN_UPDATE_INTERVAL) then return end
+    local folder = ActiveFolders[player.UserId]
+    if folder == nil then return end
+
+    -- Support both documented RequestUpdate("Folder.Key", value) and the
+    -- older wire form RequestUpdate("Folder", "Key", value).
+    local path = pathOrFolder
+    local value = keyOrValue
+    if optionalValue ~= nil then
+        if type(pathOrFolder) ~= "string" or type(keyOrValue) ~= "string" then return end
+        path = pathOrFolder .. "." .. keyOrValue
+        value = optionalValue
+    end
+    if not validPath(path) or value == nil then return end
+
+    local permission = folder.ClientWritable[path]
+    if permission == nil then return end
+    local folderName, itemName = path:match("^([%w_]+)%.([%w_]+)$")
+    local current = folder.Data[folderName]
+    if type(current) ~= "table" or current[itemName] == nil then return end
+    if itemName == "__sync" or itemName:match("__type$") then return end
+    if typeof(value) ~= typeof(current[itemName]) then return end
+    if type(value) == "number" and (value ~= value or math.abs(value) == math.huge) then return end
+    if type(value) == "table" or type(value) == "userdata" then return end
+
+    if type(permission) == "function" then
+        local ok, accepted = pcall(permission, value, current[itemName])
+        if not ok or accepted ~= true then return end
+    end
+    folder:Update(folderName, itemName, value)
 end)
 
 Net:Connect(IDs.RequestModule.Id, function(player, moduleName, moduleAction, ...)
-	local folder = PlayerFolder.get(player)
-	local mod = StatsModules[moduleName]
-
-	if mod and mod[moduleAction] then
-		mod[moduleAction](player, folder, ...)
-	end
+    if not allowRequest(player, "module", MIN_MODULE_INTERVAL) then return end
+    local folder = ActiveFolders[player.UserId]
+    if folder == nil then return end
+    if type(moduleName) ~= "string" or type(moduleAction) ~= "string" then return end
+    if #moduleName > 60 or #moduleAction > 60 then return end
+    local mod = StatsModules[moduleName]
+    if type(mod) ~= "table" or type(mod.ClientActions) ~= "table" then return end
+    if mod.ClientActions[moduleAction] ~= true then return end
+    local callback = mod[moduleAction]
+    if type(callback) ~= "function" then return end
+    local ok, err = pcall(callback, player, folder, ...)
+    if not ok then warn("[SmartReplicate] Client module action failed:", err) end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
+    requestClock[player.UserId] = nil
 	PlayerFolder.remove(player)
 end)
 
