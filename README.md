@@ -1,5 +1,42 @@
 # DataStore Builder & SmartReplicate
 
+## Security and compatibility maintenance (October 2026)
+
+### Server-authoritative remote access
+
+The server rejects direct client-originated data modifications by default. This prevents a client from changing currency or ownership by sending an arbitrary field path. Server code can deliberately allow a primitive configuration field:
+
+```luau
+local folder = VirtualData.new(player, data, Store)
+folder:AllowClientUpdate("Settings.MusicEnabled", function(value, oldValue)
+    return typeof(value) == "boolean"
+end)
+```
+
+Only allow client-updated fields that are safe to trust. Gameplay awards must be calculated on the server. Remote module actions require an explicit allowlist on each module:
+
+```luau
+local ClickModule = {}
+ClickModule.ClientActions = {OnClick = true}
+function ClickModule.OnClick(player, folder)
+    -- Server-calculated gameplay reward
+end
+return ClickModule
+```
+
+The bundled ClickModule enables its existing OnClick action; other exported functions are not available remotely. Both remote request channels have a minimum accepted interval of 0.1 seconds per player.
+
+### Data replication privacy
+
+Initial replication now sends public folders to everybody and private folders only to their owner. Transitioning a folder from public to private attempts to revoke values already replicated to other clients, but cannot make clients forget values they previously received. Never store secrets in replicated data.
+
+**Compatibility:** Existing `RequestUpdate("Folder.Key", value)` calls retain their shape, but are rejected until server-allowlisted. Old scripts that expected any client to directly set any value will require explicit server-side rules. The companion transport modules `NetworkHandler.EventBus` and `Events` must be installed separately; they are not included in this repository.
+
+**Verification:** Use a two-player Roblox Studio session to test private/public snapshots, malicious update attempts, approved field mutations, and ClickModule.OnClick. Full project type checking and benchmarks are still needed; this change is not a complete migration to `--!strict`.
+
+---
+
+
 full from the plugin as in Create Services it will replicated the required modules and scripts to the places except for Bnum
 <img width="310" height="661" alt="image" src="https://github.com/user-attachments/assets/cb5d0826-6ba3-4ba1-a440-2a6b2f95ef56" />
 
